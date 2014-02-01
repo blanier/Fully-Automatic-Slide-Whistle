@@ -2,6 +2,7 @@
 
 #define STEP_PIN 12
 #define DIR_PIN 13
+#define SOL_PIN 4
 
 int limits[2];
 int limit_pins[2] = {3,2};
@@ -17,7 +18,7 @@ int current_step_pin = HIGH;
 void setup() {
   Serial.begin(115200);
   
-  Timer1.initialize(80);        // initialize timer1, and set a 80 uSec second period
+  Timer1.initialize(160);        // initialize timer1, and set a 80 uSec second period
   Timer1.attachInterrupt(callback);  // attaches callback() as a timer overflow interrupt
 
   for (int i=0; i<2; i++) {
@@ -26,13 +27,26 @@ void setup() {
   
   pinMode(DIR_PIN, OUTPUT); 
   pinMode(STEP_PIN, OUTPUT);
+  pinMode(SOL_PIN, OUTPUT);
   
-  Serial.write("Please send me an X");
-  while (Serial.read() != 'X') {
-  }
-  // recalibrate();
+  //userInterlock();
+  recalibrate();
 }
 
+void loop() {
+  delay(250);
+  
+  statusUpdate();
+  readInput();
+  toggleSolenoid();
+}
+
+void userInterlock() {
+  Serial.println("Please send me an X");
+  while (Serial.read() != 'X') {
+  }
+}
+  
 void statusUpdate() {
   Serial.print(limits[0]);
   Serial.print(" ");
@@ -53,38 +67,34 @@ void statusUpdate() {
 
 // we have roughly 600000 steps.  Make 0 near 1 edge and 600000 near the other
 void recalibrate() {
+  
+  target_position = 100000;
+  delay(1000);
+  
   long range = -600000;
-  for (int i=0; i<2; i++) {
-    Serial.print("Setting target to ");
-    Serial.println(range);
-    target_position = range;
-    range = -range;
-    
-    while (!limits[i]) {
-    }
-    
-    if (i==0) {
-      Serial.println("MIN found");
-      current_position = 0;
-    } else {
-      Serial.println("MAX found");
-    }
-  }  
-  target_position = current_position/2;
+  
+  Serial.print("Setting target to ");
+  Serial.println(range);
+  target_position = range;
+  while (limits[0]== LOW) {
+    statusUpdate();
+  }
+  Serial.println("MIN found");
+  current_position = 0;
 }
 
 void readInput() {
   if (Serial.available()) {
+    
     target_position = Serial.parseInt();
     Serial.read();  // add an extra read.  Sender qill add a space.  This allows parseInt to end fast (rather than timing out)
   }
 }
-    
-void loop() {
-  delay(250);
-  
-  statusUpdate();
-  readInput();
+
+int solProxy = HIGH;
+void toggleSolenoid() {
+  solProxy = (solProxy==HIGH)?LOW:HIGH;
+  digitalWrite(SOL_PIN, solProxy);
 }
 
 void callback() {
